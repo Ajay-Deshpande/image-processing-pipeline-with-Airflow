@@ -7,9 +7,11 @@ disable_beta_transforms_warning()
 from torchvision.transforms import v2, InterpolationMode
 from torchvision.io import read_image, write_file, write_jpeg, write_png
 from tqdm import tqdm
+from airflow.decorators import task
 
-def main():
-    data_path = glob('images/*')
+@task(task_id = "image_processing")
+def transform(data_path, transformed_images_path):
+    image_folder = glob(f'{data_path}/*')
 
     transforms = v2.Compose([
         v2.RandomApply([
@@ -21,26 +23,29 @@ def main():
         v2.Resize((256, 256), InterpolationMode.BICUBIC)
     ])
 
-    for folder_path in tqdm(data_path):
-        folder_class = folder_path.split('\\')[-1]
-        file_paths = glob(f'images/{folder_class}/*.jpg')
+    for folder_path in tqdm(image_folder):
+        folder_class = folder_path.split('/')[-1]
+        file_paths = glob(f'{folder_path}/*.jpg')
         aug_img_count = int(((300 - len(file_paths)) / len(file_paths)) + 1)
         for file_path in file_paths:
-            file_name = file_path.split('.')[0].split('\\')[-1]
+            file_name = file_path.split('.')[0].split('/')[-1]
             img = read_image(file_path)
-            for aug_ger in range(aug_img_count):
-                new_file_name = f'augmented_images/{folder_class}/{file_name}_aug_{aug_ger}.jpeg'
-                try:
-                    write_jpeg(transforms(img), new_file_name, quality = 100)
-                except:
-                    os.makedirs('/'.join(new_file_name.split('/')[ : -1]))
-                    write_jpeg(transforms(img), new_file_name, quality = 100)
-            new_file_name = f'augmented_images/{folder_class}/{file_name}.jpeg'
+            aug_ger = 0
+            new_file_name = os.path.join(f'{transformed_images_path}', f'{folder_class}/{file_name}_aug_{aug_ger}.jpg')
             try:
                 write_jpeg(v2.Resize((256, 256), InterpolationMode.BICUBIC)(img), new_file_name, quality = 100)
             except:
                 os.makedirs('/'.join(new_file_name.split('/')[ : -1]))
                 write_jpeg(v2.Resize((256, 256), InterpolationMode.BICUBIC)(img), new_file_name, quality = 100)
+            for aug_ger in range(1, aug_img_count + 1):
+                new_file_name = f'{folder_class}/{file_name}_aug_{aug_ger}.jpeg'
+                new_file_name = os.path.join(f'{transformed_images_path}', new_file_name)
+                try:
+                    write_jpeg(transforms(img), new_file_name, quality = 100)
+                except:
+                    os.makedirs('/'.join(new_file_name.split('/')[ : -1]))
+                    write_jpeg(transforms(img), new_file_name, quality = 100)
+    return transformed_images_path
 
 if __name__ == "__main__":
-    main()
+    transform("images", 'aug_imgs')

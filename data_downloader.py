@@ -4,21 +4,23 @@ from urllib import request
 from urllib.parse import quote
 import os
 from tqdm import tqdm
+from airflow.decorators import task
 
-
-def write_img_file(img, category, file_num):
-    folder_name = f'images/{category}'
+def write_img_file(img, file_path_prefix, category, file_num):
+    folder_name = f'{file_path_prefix}/{category}'
     file_name = f'{folder_name}/image_{file_num}.jpg'
     try:
         with open(file_name, 'wb') as f:
             f.write(img)
     except:
+        print('creating', folder_name)
         os.makedirs(folder_name)
         with open(file_name, 'wb') as f:
             f.write(img)
     return True
 
-def main():
+@task(task_id = "download_data")
+def download(data_path):
     HEADERS = {
         'User-Agent':
         "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/77.0.3865.90 Safari/537.36"
@@ -39,7 +41,8 @@ def main():
             except:
                 continue
             counter.update()
-            write_img_file(img, keyword, index)
+            write_img_file(img, data_path, keyword, index)
+    return data_path
 
 if __name__ == "__main__":
-    main()
+    download()

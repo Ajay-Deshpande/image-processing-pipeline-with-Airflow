@@ -9,6 +9,7 @@ from torchvision.datasets import ImageFolder
 from torch import nn, optim
 from torch.utils.data import random_split
 import torch
+from airflow.decorators import task
 
 class AlexNet(nn.Module):
     def __init__(self, num_classes = 2, dropout = 0.5):
@@ -24,7 +25,7 @@ class AlexNet(nn.Module):
             nn.MaxPool2d(kernel_size=3, stride=2),
             nn.BatchNorm2d(256),
             
-            nn.Dropout(p=dropout)
+            nn.Dropout(p=dropout),
             
             nn.Conv2d(256, 512, kernel_size=3, padding=1),
             nn.ReLU(inplace=True),
@@ -48,14 +49,14 @@ class AlexNet(nn.Module):
             
             nn.Linear(2048, 1024),
             nn.ReLU(inplace=True),
-            nn.BatchNorm1d(2048),
-            
-            nn.Dropout(p=dropout)
-            nn.Linear(1024, 512),
-            nn.ReLU(inplace=True),
             nn.BatchNorm1d(1024),
             
-            nn.Dropout(p=dropout)
+            nn.Dropout(p=dropout),
+            nn.Linear(1024, 512),
+            nn.ReLU(inplace=True),
+            nn.BatchNorm1d(512),
+            
+            nn.Dropout(p=dropout),
             nn.Linear(512, 256),
             nn.ReLU(inplace=True),
             nn.BatchNorm1d(256),
@@ -78,8 +79,10 @@ def init_weight_fn(m):
         nn.init.normal_(m.weight.data, 1., 0)
         nn.init.constant_(m.bias.data, 0.)
 
-def main():
-    dataset = ImageFolder('./augmented_images/', transform = v2.Compose([v2.Grayscale(), v2.ToImageTensor(), v2.ToDtype(torch.float32)]))
+@task(task_id = 'train_cv_model')
+def train_model(transformed_images_path):
+    print(transformed_images_path)
+    dataset = ImageFolder(f'{transformed_images_path}/', transform = v2.Compose([v2.Grayscale(), v2.ToTensor()]))
     train_ds, val_ds = random_split(dataset, [.8, .2])
     train_dl = DataLoader(train_ds, batch_size = 64, shuffle = True, pin_memory = True)
     val_dl = DataLoader(val_ds, batch_size = 64, shuffle = True, pin_memory = True)
@@ -112,6 +115,7 @@ def main():
             metric += (preds.argmax(axis = 1) == data[1]).sum()
             running_loss += loss_func(model(val_data[0]), val_data[1])
         print(f"Epoch: {epoch}\nAverage Validation Loss = {running_loss / len(val_dl)}\nAccuracy = {metric/len(val_ds)}")
+    return True
 
 if __name__ == "__main__":
-    main()
+    train_model('')
